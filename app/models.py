@@ -42,15 +42,18 @@ class VehicleType:
     name: str
     unit_count: int = 0
     sort_order: int = 0
+    po_prefix: str = ""
 
     @classmethod
     def from_row(cls, row) -> "VehicleType":
+        keys = row.keys()
         return cls(
             id=row["id"],
             project_id=row["project_id"],
             name=row["name"] or "",
             unit_count=int(row["unit_count"] or 0),
             sort_order=int(row["sort_order"] or 0),
+            po_prefix=(row["po_prefix"] or "") if "po_prefix" in keys else "",
         )
 
 
@@ -69,7 +72,7 @@ class Vehicle:
     def display_name(self) -> str:
         if self.plate:
             return self.plate
-        type_name = self.type_name or self.vehicle_type or "Kendaraan"
+        type_name = (self.type_name or self.vehicle_type or "Kendaraan").title()
         if self.unit_no:
             return f"{type_name} #{self.unit_no}"
         return type_name

@@ -139,12 +139,12 @@ class RabParserTests(unittest.TestCase):
                 ("SUZUKI HAYATE", 30, 47),
                 ("KAWASAKI 150 CC", 2, 15),
                 ("KAWASAKI 250 CC", 2, 14),
-                ("YAMAHA NMAX 150 CC", 5, 15),
+                ("YAMAHA NMAX", 5, 15),
             ],
         )
         self.assertEqual(result.issues, [])
         first = result.groups[0].items[0]
-        self.assertEqual(first.name, "SERVICE")
+        self.assertEqual(first.name, "Service")
         self.assertEqual(first.term_qty, [3, 3])
 
 

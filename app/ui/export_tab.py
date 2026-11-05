@@ -115,6 +115,7 @@ class ExportTab(QWidget):
         self.mode_combo = QComboBox()
         self.mode_combo.addItem("Satu file per kendaraan", "files")
         self.mode_combo.addItem("Satu workbook, sheet per kendaraan", "workbook")
+        self.mode_combo.setCurrentIndex(1)
         options2.addWidget(self.mode_combo)
         self.overwrite_check = QCheckBox("Timpa file yang sudah ada")
         options2.addWidget(self.overwrite_check)
