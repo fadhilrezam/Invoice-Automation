@@ -53,6 +53,7 @@ class ProjectTab(QWidget):
         self.vehicle_types = []
         self._vehicle_rows = []
         self._updating_vehicle_table = False
+        self._updating_prefix_table = False
         self._build_ui()
         self._set_enabled(False)
 
@@ -82,6 +83,10 @@ class ProjectTab(QWidget):
         self.address_edit.setPlaceholderText("Alamat klien yang tampil di invoice")
         self.po_edit = QLineEdit()
         self.po_edit.setPlaceholderText("mis. VXN-")
+        self.po_edit.setToolTip(
+            "Dipakai hanya untuk jenis kendaraan yang prefix-nya belum diisi. "
+            "Untuk pengaturan per jenis, gunakan tabel di bawah."
+        )
         self.type_edit = QLineEdit()
         self.type_edit.setPlaceholderText("mis. Yamaha Vixion")
         self.date_edit = QDateEdit()
@@ -90,7 +95,7 @@ class ProjectTab(QWidget):
         form.addRow("Nama proyek", self.name_edit)
         form.addRow("Kepada Yth (klien)", self.client_edit)
         form.addRow("Alamat klien", self.address_edit)
-        form.addRow("Prefix No PO", self.po_edit)
+        form.addRow("Prefix No PO (default)", self.po_edit)
         form.addRow("Tipe kendaraan default", self.type_edit)
         form.addRow("Tanggal invoice", self.date_edit)
         info.add_layout(form)
@@ -139,6 +144,36 @@ class ProjectTab(QWidget):
         self.issues_table.setMaximumHeight(220)
         rab.add(self.issues_table)
         layout.addWidget(rab)
+
+        # --- prefix No PO per jenis (satu input per jenis, berlaku untuk semua unit)
+        prefix_card = Card("Prefix No PO per Jenis Kendaraan")
+        prefix_note = muted(
+            "Cukup isi sekali untuk setiap jenis kendaraan. Prefix otomatis "
+            "dipakai untuk semua unit pada jenis tersebut; No PO tiap unit = "
+            "prefix + nomor kendaraan (atau label unit bila plat kosong). "
+            "Contoh: HYT-, VXN-, SCRP-, NMAX-."
+        )
+        prefix_note.setWordWrap(True)
+        prefix_card.add(prefix_note)
+        self.prefix_table = QTableWidget()
+        self.prefix_table.setColumnCount(4)
+        self.prefix_table.setHorizontalHeaderLabels(
+            ["Jenis Kendaraan", "Jumlah Unit", "Prefix No PO", "Contoh No PO"]
+        )
+        setup_table(self.prefix_table, row_height=30)
+        self.prefix_table.setEditTriggers(
+            QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed
+        )
+        self.prefix_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.prefix_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.prefix_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.prefix_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.prefix_table.setColumnWidth(1, 100)
+        self.prefix_table.setColumnWidth(2, 160)
+        self.prefix_table.setMinimumHeight(150)
+        self.prefix_table.itemChanged.connect(self._prefix_changed)
+        prefix_card.add(self.prefix_table)
+        layout.addWidget(prefix_card)
 
         # --- kendaraan
         vehicles = Card("Kendaraan per Jenis")
@@ -335,6 +370,47 @@ class ProjectTab(QWidget):
             f"{len(all_vehicles)} unit • {len(self.vehicle_types)} jenis • "
             f"{filled} plat terisi"
         )
+
+        # Populate prefix table (satu baris per jenis kendaraan)
+        self._updating_prefix_table = True
+        self.prefix_table.setRowCount(len(self.vehicle_types))
+        for row, vehicle_type in enumerate(self.vehicle_types):
+            type_vehicles = [
+                vehicle
+                for vehicle in all_vehicles
+                if vehicle.vehicle_type_id == vehicle_type.id
+            ]
+            unit_count = len(type_vehicles) or vehicle_type.unit_count
+
+            name_item = QTableWidgetItem(vehicle_type.name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            self.prefix_table.setItem(row, 0, name_item)
+
+            unit_item = QTableWidgetItem(str(unit_count))
+            unit_item.setTextAlignment(Qt.AlignCenter)
+            unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+            self.prefix_table.setItem(row, 1, unit_item)
+
+            prefix_item = QTableWidgetItem(vehicle_type.po_prefix or "")
+            prefix_item.setData(Qt.UserRole, vehicle_type.id)
+            prefix_item.setToolTip(
+                "Isi sekali di sini. Prefix berlaku untuk semua unit jenis ini."
+            )
+            self.prefix_table.setItem(row, 2, prefix_item)
+
+            example_label = (
+                type_vehicles[0].plate or type_vehicles[0].display_name
+                if type_vehicles
+                else "<nomor kendaraan>"
+            )
+            example_item = QTableWidgetItem(f"{vehicle_type.po_prefix or ''}{example_label}")
+            example_item.setFlags(example_item.flags() & ~Qt.ItemIsEditable)
+            example_item.setToolTip(
+                "Contoh No PO untuk unit pertama. Unit lain memakai prefix yang sama "
+                "dengan nomor kendaraannya masing-masing."
+            )
+            self.prefix_table.setItem(row, 3, example_item)
+        self._updating_prefix_table = False
 
         has_rab = bool(items)
         self.items_btn.setEnabled(has_rab)
@@ -567,6 +643,37 @@ class ProjectTab(QWidget):
             f"{len(self.vehicle_types)} jenis • "
             f"{sum(1 for v in self.db.list_vehicles(self.project.id) if v.plate)} plat terisi"
         )
+
+    def _prefix_changed(self, item: QTableWidgetItem) -> None:
+        if getattr(self, "_updating_prefix_table", False):
+            return
+        if item.column() != 2 or not self.project:
+            return
+        vehicle_type_id = item.data(Qt.UserRole)
+        if vehicle_type_id is None:
+            return
+        new_prefix = item.text().strip()
+        self.db.update_vehicle_type_po_prefix(int(vehicle_type_id), new_prefix)
+        self.db.log(
+            self.project.id,
+            "edit_prefix",
+            f"Prefix jenis {vehicle_type_id} diubah menjadi '{new_prefix}'",
+        )
+
+        # Perbarui contoh No PO tanpa memicu sinyal lain.
+        vehicles = self.db.list_vehicles(self.project.id, int(vehicle_type_id))
+        label = (
+            vehicles[0].plate or vehicles[0].display_name
+            if vehicles
+            else "<nomor kendaraan>"
+        )
+        self._updating_prefix_table = True
+        example = self.prefix_table.item(item.row(), 3)
+        if example is not None:
+            example.setText(f"{new_prefix}{label}")
+        self._updating_prefix_table = False
+
+        self.data_changed.emit()
 
     def _delete_vehicle(self) -> None:
         vehicle = self._selected_vehicle()

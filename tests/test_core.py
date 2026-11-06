@@ -212,6 +212,44 @@ class DatabaseAndValidationTests(unittest.TestCase):
         first = self.db.list_items(self.pid, vixion.id)[0]
         self.assertEqual(first.type_name, "YAMAHA VIXION")
 
+    def test_po_prefix_per_type_applies_to_all_units(self):
+        import openpyxl
+
+        wb = openpyxl.load_workbook(SAMPLE_REAL, data_only=True)
+        row, columns = detect_best_header(wb["Sheet1"])
+        result = parse_rab(SAMPLE_REAL, RabMapping("Sheet1", row, columns))
+        self.db.replace_rab(self.pid, result.term_names, groups=result.groups)
+
+        types = self.db.list_vehicle_types(self.pid)
+        self.assertTrue(all(t.po_prefix == "" for t in types))
+
+        # Isi prefix sekali untuk satu jenis kendaraan.
+        vixion = types[0]
+        self.db.update_vehicle_type_po_prefix(vixion.id, "VXN-")
+        self.assertEqual(
+            {v.po_prefix for v in self.db.list_vehicles(self.pid, vixion.id)},
+            {"VXN-"},
+        )
+        # Jenis lain tidak ikut berubah.
+        self.assertTrue(
+            all(
+                v.po_prefix == ""
+                for t in types[1:]
+                for v in self.db.list_vehicles(self.pid, t.id)
+            )
+        )
+
+        # Invoice unit pertama memakai prefix jenis tersebut.
+        term = self.db.list_terms(self.pid)[0]
+        item = self.db.list_items(self.pid, vixion.id)[0]
+        vehicle = self.db.list_vehicles(self.pid, vixion.id)[0]
+        self.db.set_allocation(term.id, item.id, vehicle.id, 1)
+        invoice = build_invoice_data(
+            self.db, self.db.get_project(self.pid), term, vehicle
+        )
+        self.assertIsNotNone(invoice)
+        self.assertEqual(invoice.po_number, f"VXN-{vehicle.display_name}")
+
 
 class InvoiceExportTests(unittest.TestCase):
     def test_build_invoice_with_many_lines(self):
@@ -279,6 +317,48 @@ class InvoiceExportTests(unittest.TestCase):
             self.assertEqual(ws["D12"].value, 250_000)  # sub total
             self.assertEqual(ws["C14"].value, "TOTAL")
             self.assertEqual(ws["C17"].value, "Hormat Kami,")
+            wb.close()
+
+
+    def test_workbook_has_rekap_first_sheet(self):
+        import datetime
+
+        import openpyxl
+
+        def make_invoice(plate, vehicle_type, po_number):
+            return InvoiceData(
+                plate=plate,
+                vehicle_type=vehicle_type,
+                client_name="Klien",
+                client_address="Alamat",
+                company_name="CV. PANJI PERKASA",
+                company_address="Bandung",
+                po_number=po_number,
+                invoice_date=datetime.date(2026, 7, 1),
+                lines=[InvoiceLine("Service", 1, 250_000)],
+                term_name="Termin 1",
+                project_name="R2 Lantas",
+            )
+
+        invoices = [
+            make_invoice("D 1 A", "Yamaha Vixion", "VXN-D 1 A"),
+            make_invoice("D 2 B", "Suzuki Hayate", "HYT-D 2 B"),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = export_invoices(TEMPLATE, invoices, tmp, mode="workbook")
+            self.assertEqual(len(paths), 1)
+            wb = openpyxl.load_workbook(paths[0])
+            self.assertEqual(wb.sheetnames[0], "Rekap")
+            self.assertEqual(wb.sheetnames[1], "Pivot Qty")
+            self.assertEqual(len(wb.sheetnames), len(invoices) + 2)
+            ws = wb["Rekap"]
+            self.assertEqual(ws["A1"].value, "Rekap R2 Lantas (Termin 1)")
+            self.assertEqual(ws["A2"].value, "No")
+            self.assertEqual(ws["B3"].value, "VXN-D 1 A")
+            self.assertEqual(ws["E3"].value, "Yamaha Vixion")
+            self.assertEqual(ws["B4"].value, "HYT-D 2 B")
+            self.assertEqual(ws["A5"].value, "TOTAL")
+            self.assertEqual(ws["F5"].value, 500_000)
             wb.close()
 
 

@@ -318,7 +318,7 @@ class LogDialog(QDialog):
 
 HELP_HTML = """
 <h2>Panduan Singkat</h2>
-<p><b>1. Buat proyek</b> lalu isi data klien, prefix No PO, tipe kendaraan default, dan tanggal invoice.</p>
+<p><b>1. Buat proyek</b> lalu isi data klien, tipe kendaraan default, dan tanggal invoice.</p>
 <p><b>2. Import RAB</b> dari Excel. Aplikasi mendeteksi header otomatis; koreksi pemetaan
 kolom bila perlu. RAB boleh berisi banyak jenis kendaraan dengan penanda
 <code>NAMA JENIS (N Unit)</code>. Kolom yang dikenali:</p>
@@ -334,6 +334,11 @@ di dialog import. Setiap jenis kendaraan otomatis mendapat slot unit sebanyak N.
 <p><b>3. Isi plat</b> lewat tabel kendaraan (klik dua kali) atau Import Plat Excel.
 Plat boleh dikosongkan dulu; invoice memakai label <code>JENIS #unit</code>.
 Import plat hanya mengisi ulang plat, tidak menghapus alokasi qty.</p>
+<p><b>3b. Isi Prefix No PO per jenis kendaraan</b> di tabel <b>Prefix No PO per
+Jenis Kendaraan</b>. Cukup sekali untuk setiap jenis; prefix otomatis berlaku untuk
+semua unit pada jenis itu. No PO tiap invoice = prefix + nomor kendaraan (atau label
+<code>JENIS #unit</code> bila plat kosong). Kolom <b>Contoh No PO</b> memperlihatkan
+hasilnya.</p>
 <p><b>4. Alokasi</b>: pilih termin dan jenis kendaraan, klik <b>Bagi Otomatis</b>.
 Proses ini mencakup semua jenis kendaraan pada termin tersebut. Item yang habis dibagi
 langsung terisi. Item dengan sisa akan memunculkan antrean konfirmasi: pilih kendaraan
@@ -341,9 +346,13 @@ yang menerima tambahan 1 unit. Kamu juga bisa mengedit sel qty secara manual.</p
 <p><b>5. Kunci termin</b> setelah jumlah alokasi tiap item sama dengan qty termin
 di semua jenis kendaraan. Export diblokir jika masih ada selisih.</p>
 <p><b>6. Export invoice</b>: pilih termin dan plat/unit, lalu export. Satu invoice =
-satu plat per termin. Hasil mengikuti layout <code>invoice_template.xlsx</code>
-(header, tabel item, sub total, disc, total, footer tanda tangan). Jumlah baris item
-menyesuaikan otomatis.</p>
+satu plat per termin. Nama sheet invoice = No PO (prefix + plat). Hasil mengikuti
+layout <code>invoice_template.xlsx</code> (header, tabel item, sub total, disc, total,
+footer tanda tangan). Jumlah baris item menyesuaikan otomatis.</p>
+<p>Pilih format <b>Satu workbook, sheet per kendaraan</b> untuk mendapatkan satu file
+Excel berisi banyak sheet: sheet <b>Rekap</b> (di posisi pertama), sheet
+<b>Pivot Qty</b> (pembagian qty barang per termin terhadap No PO, dengan filter otomatis
+berdasarkan Termin dan Jenis Kendaraan), lalu satu sheet per kendaraan.</p>
 <h3>Aturan pembagian</h3>
 <p>Untuk qty Q dan N kendaraan: dasar = Q // N, sisa R = Q % N. Sebanyak R kendaraan
 mendapat tambahan 1, dipilih user. Saran awal memprioritaskan kendaraan yang paling

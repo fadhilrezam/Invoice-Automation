@@ -33,7 +33,8 @@ def build_invoice_data(
 
     invoice_date = term.date_obj or project.date_obj
     label = vehicle.plate or vehicle.display_name
-    po_number = f"{project.po_prefix or ''}{label}"
+    po_prefix = vehicle.po_prefix or project.po_prefix or ""
+    po_number = f"{po_prefix}{label}"
     vehicle_type = vehicle.type_name or vehicle.vehicle_type or project.vehicle_type
     return InvoiceData(
         plate=vehicle.plate,
@@ -48,6 +49,7 @@ def build_invoice_data(
         lines=lines,
         discount_percent=term.discount_percent,
         term_name=term.name,
+        project_name=project.name,
     )
 
 

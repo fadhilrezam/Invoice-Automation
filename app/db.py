@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name TEXT NOT NULL,
     client_name TEXT NOT NULL DEFAULT '',
     client_address TEXT NOT NULL DEFAULT '',
-    po_prefix TEXT NOT NULL DEFAULT 'VXN-',
+    po_prefix TEXT NOT NULL DEFAULT '',
     vehicle_type TEXT NOT NULL DEFAULT '',
     invoice_date TEXT NOT NULL,
     created_at TEXT NOT NULL
@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS vehicle_types (
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     unit_count INTEGER NOT NULL DEFAULT 0,
-    sort_order INTEGER NOT NULL DEFAULT 0
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    po_prefix TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS vehicles (
@@ -192,6 +193,22 @@ class Database:
                     (index, int(row["id"])),
                 )
 
+        # Migrasi: tambahkan kolom po_prefix ke vehicle_types
+        if "po_prefix" not in self._columns("vehicle_types"):
+            self.conn.execute(
+                "ALTER TABLE vehicle_types ADD COLUMN po_prefix TEXT NOT NULL DEFAULT ''"
+            )
+        # Proyek lama dengan satu jenis kendaraan: wariskan prefix proyek.
+        # Proyek multi-jenis tidak diisi otomatis agar tiap jenis diisi sendiri.
+        self.conn.execute(
+            """UPDATE vehicle_types SET po_prefix = (
+               SELECT p.po_prefix FROM projects p WHERE p.id = vehicle_types.project_id
+             ) WHERE po_prefix = '' AND (
+               SELECT COUNT(*) FROM vehicle_types vt2
+               WHERE vt2.project_id = vehicle_types.project_id
+             ) = 1"""
+        )
+
     # ------------------------------------------------------------------ utils
     def close(self) -> None:
         self.conn.close()
@@ -227,7 +244,7 @@ class Database:
         name: str,
         client_name: str = "",
         client_address: str = "",
-        po_prefix: str = "VXN-",
+        po_prefix: str = "",
         vehicle_type: str = "",
         invoice_date: date | None = None,
     ) -> int:
@@ -385,6 +402,7 @@ class Database:
         *,
         name: str | None = None,
         unit_count: int | None = None,
+        po_prefix: str | None = None,
     ) -> None:
         current = self.get_vehicle_type(type_id)
         if current is None:
@@ -395,13 +413,24 @@ class Database:
             if unit_count is not None
             else current.unit_count
         )
+        new_po_prefix = (
+            (po_prefix if po_prefix is not None else current.po_prefix).strip()
+            or ""
+        )
         with self.transaction() as conn:
             conn.execute(
-                "UPDATE vehicle_types SET name = ?, unit_count = ? WHERE id = ?",
-                (new_name, new_count, type_id),
+                "UPDATE vehicle_types SET name = ?, unit_count = ?, po_prefix = ? WHERE id = ?",
+                (new_name, new_count, new_po_prefix, type_id),
             )
             self._sync_type_vehicles(
                 conn, type_id, current.project_id, new_name, new_count
+            )
+
+    def update_vehicle_type_po_prefix(self, type_id: int, po_prefix: str) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                "UPDATE vehicle_types SET po_prefix = ? WHERE id = ?",
+                (po_prefix.strip() or "", type_id),
             )
 
     def delete_vehicle_type(self, type_id: int) -> None:
@@ -424,7 +453,7 @@ class Database:
         self, project_id: int, vehicle_type_id: int | None = None
     ) -> list[Vehicle]:
         sql = """
-            SELECT v.*, vt.name AS type_name
+            SELECT v.*, vt.name AS type_name, vt.po_prefix AS po_prefix
             FROM vehicles v
             LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
             WHERE v.project_id = ?

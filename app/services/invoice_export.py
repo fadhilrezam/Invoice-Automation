@@ -9,6 +9,7 @@ from typing import Iterable, Sequence
 
 import openpyxl
 from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.properties import PageSetupProperties
 
@@ -44,6 +45,7 @@ class InvoiceData:
     discount_percent: float = 0.0
     term_name: str = ""
     label: str = ""
+    project_name: str = ""
 
     @property
     def subtotal(self) -> int:
@@ -154,7 +156,14 @@ def build_invoice_workbook(
     else:
         wb = workbook
 
-    title = _unique_sheet_name(wb, sheet_name or invoice.label or invoice.plate or "Invoice")
+    title = _unique_sheet_name(
+        wb,
+        sheet_name
+        or invoice.po_number
+        or invoice.label
+        or invoice.plate
+        or "Invoice",
+    )
     ws = wb.create_sheet(title=title)
 
     # Lebar kolom & tinggi baris
@@ -252,6 +261,305 @@ def build_invoice_workbook(
     return wb
 
 
+def build_rekap_sheet(
+    wb: Workbook,
+    invoices: Sequence[InvoiceData],
+    project_name: str,
+    term_name: str,
+    company_name: str,
+    *,
+    index: int | None = None,
+) -> str:
+    """Buat sheet rekap di workbook."""
+    title = _unique_sheet_name(wb, "Rekap")
+    ws = wb.create_sheet(title=title, index=index)
+
+    # Header
+    ws["A1"] = f"Rekap {project_name} ({term_name})"
+    ws["A1"].font = openpyxl.styles.Font(bold=True, size=14)
+
+    ws["A2"] = "No"
+    ws["B2"] = "No PO"
+    ws["C2"] = "Tanggal"
+    ws["D2"] = "No Kendaraan"
+    ws["E2"] = "Tipe Kendaraan"
+    ws["F2"] = "Jumlah (Rp.)"
+
+    # Style header
+    header_font = openpyxl.styles.Font(bold=True)
+    for col in range(1, 7):
+        ws.cell(row=2, column=col).font = header_font
+
+    # Data rows
+    row = 3
+    total_amount = 0
+    for invoice in invoices:
+        ws.cell(row=row, column=1, value=row - 2)
+        ws.cell(row=row, column=2, value=invoice.po_number)
+        ws.cell(row=row, column=3, value=invoice.invoice_date)
+        ws.cell(row=row, column=4, value=invoice.plate or invoice.label or "")
+        ws.cell(row=row, column=5, value=invoice.vehicle_type)
+        ws.cell(row=row, column=6, value=invoice.total)
+        total_amount += invoice.total
+        row += 1
+
+    # TOTAL row
+    ws["A" + str(row)] = "TOTAL"
+    ws["F" + str(row)] = total_amount
+
+    # Per-type breakdown
+    breakdown_row = row + 2
+    ws["B" + str(breakdown_row)] = "Tipe Kendaraan"
+    ws["C" + str(breakdown_row)] = "Unit"
+    ws["D" + str(breakdown_row)] = "Jumlah (Rp.)"
+
+    # Group invoices by vehicle_type
+    types = {}
+    for invoice in invoices:
+        vt = invoice.vehicle_type
+        if vt not in types:
+            types[vt] = {"unit_count": 0, "total": 0}
+        types[vt]["unit_count"] += 1
+        types[vt]["total"] += invoice.total
+
+    # Write per-type rows
+    br = breakdown_row + 1
+    for vt, data in types.items():
+        ws.cell(row=br, column=2, value=vt)
+        ws.cell(row=br, column=3, value=data["unit_count"])
+        ws.cell(row=br, column=4, value=data["total"])
+        br += 1
+
+    # Footer
+    ws["E" + str(br)] = "Hormat Kami,"
+    ws["E" + str(br + 2)] = company_name
+
+    # Adjust column widths
+    for col in range(1, 7):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
+
+    # Page setup
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_area = f"A1:F{br + 4}"
+    return title
+
+
+def build_pivot_sheet(
+    wb: Workbook,
+    invoices: Sequence[InvoiceData],
+    *,
+    index: int | None = None,
+) -> str:
+    """Buat sheet pivot qty barang x No PO per termin.
+
+    Sheet berbentuk tabel pivot datar: satu baris per kombinasi
+    termin + jenis kendaraan + nama barang, dengan kolom No PO kendaraan.
+    AutoFilter aktif sehingga bisa difilter berdasarkan Termin dan
+    Jenis Kendaraan.
+    """
+    title = _unique_sheet_name(wb, "Pivot Qty")
+    ws = wb.create_sheet(title=title, index=index)
+
+    # Urutkan invoice per jenis agar kolom No PO satu jenis berdampingan.
+    type_order: dict[str, int] = {}
+    for invoice in invoices:
+        type_order.setdefault(invoice.vehicle_type or "-", len(type_order))
+    ordered = sorted(
+        enumerate(invoices),
+        key=lambda pair: (type_order[pair[1].vehicle_type or "-"], pair[0]),
+    )
+
+    # Header kolom No PO (unik).
+    used: dict[str, int] = {}
+    plate_headers: list[tuple[int, str, str]] = []
+    for original_index, invoice in ordered:
+        header = (
+            invoice.po_number or invoice.label or invoice.plate or "Kendaraan"
+        ).strip()
+        count = used.get(header, 0) + 1
+        used[header] = count
+        if count > 1:
+            header = f"{header} ({count})"
+        plate_headers.append(
+            (original_index, header, invoice.vehicle_type or "-")
+        )
+
+    first_col = 5  # E
+    plate_cols = len(plate_headers)
+    total_col = first_col + plate_cols
+    amount_col = total_col + 1
+    last_col = amount_col
+
+    # Qty per invoice per nama barang.
+    qty_map = {
+        index: {line.name: int(line.qty) for line in invoice.lines}
+        for index, invoice in enumerate(invoices)
+    }
+
+    # ---------------------------------------------------------------- header
+    ws.cell(row=1, column=1, value="Pivot Pembagian Qty per Termin")
+    ws.cell(row=1, column=1).font = Font(bold=True, size=14)
+    ws.merge_cells(
+        start_row=1, start_column=1, end_row=1, end_column=last_col
+    )
+    ws.cell(row=2, column=1, value="Ringkasan Item")
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=4)
+
+    headers = ["Termin", "Jenis Kendaraan", "Nama Barang", "Harga Satuan"]
+    for col, text in enumerate(headers, start=1):
+        ws.cell(row=3, column=col, value=text)
+    for offset, (_, header, _) in enumerate(plate_headers):
+        ws.cell(row=3, column=first_col + offset, value=header)
+    ws.cell(row=3, column=total_col, value="Total Qty")
+    ws.cell(row=3, column=amount_col, value="Jumlah (Rp.)")
+
+    header_font = Font(bold=True)
+    header_fill = PatternFill("solid", fgColor="DDEBF7")
+    thin = Side(style="thin", color="B7C9D6")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col in range(1, last_col + 1):
+        cell = ws.cell(row=3, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=True
+        )
+
+    # Label jenis kendaraan di atas kolom No PO (merge per jenis).
+    if plate_headers:
+        group_start = first_col
+        current_type = plate_headers[0][2]
+        for offset in range(1, len(plate_headers) + 1):
+            is_end = offset == len(plate_headers)
+            next_type = None if is_end else plate_headers[offset][2]
+            if not is_end and next_type == current_type:
+                continue
+            group_end = first_col + offset - 1
+            if group_start == group_end:
+                ws.cell(row=2, column=group_start, value=current_type)
+            else:
+                ws.merge_cells(
+                    start_row=2,
+                    start_column=group_start,
+                    end_row=2,
+                    end_column=group_end,
+                )
+                ws.cell(row=2, column=group_start, value=current_type)
+            if not is_end:
+                group_start = first_col + offset
+                current_type = next_type
+        for col in range(1, last_col + 1):
+            ws.cell(row=2, column=col).font = header_font
+            ws.cell(row=2, column=col).alignment = Alignment(
+                horizontal="center", vertical="center"
+            )
+        # Kelompokkan kolom per jenis agar bisa dilipat.
+        group_start = first_col
+        current_type = plate_headers[0][2]
+        for offset in range(1, len(plate_headers) + 1):
+            is_end = offset == len(plate_headers)
+            next_type = None if is_end else plate_headers[offset][2]
+            if not is_end and next_type == current_type:
+                continue
+            group_end = first_col + offset - 1
+            ws.column_dimensions.group(
+                get_column_letter(group_start),
+                get_column_letter(group_end),
+                outline_level=1,
+                hidden=False,
+            )
+            if not is_end:
+                group_start = first_col + offset
+                current_type = next_type
+
+    # ------------------------------------------------------------------ data
+    term_order: dict[str, list[InvoiceData]] = {}
+    for invoice in invoices:
+        term_order.setdefault(invoice.term_name or "Termin", []).append(invoice)
+
+    row = 4
+    for term, term_invoices in term_order.items():
+        type_groups: dict[str, list[InvoiceData]] = {}
+        for invoice in term_invoices:
+            type_groups.setdefault(
+                invoice.vehicle_type or "-", []
+            ).append(invoice)
+        for vtype, group in type_groups.items():
+            items: dict[str, int] = {}
+            for invoice in group:
+                for line in invoice.lines:
+                    items.setdefault(line.name, int(line.unit_price))
+            for item_name, unit_price in items.items():
+                ws.cell(row=row, column=1, value=term)
+                ws.cell(row=row, column=2, value=vtype)
+                ws.cell(row=row, column=3, value=item_name)
+                price_cell = ws.cell(row=row, column=4, value=unit_price)
+                price_cell.number_format = "#,##0"
+
+                total_qty = 0
+                for offset, (original_index, _, _) in enumerate(plate_headers):
+                    invoice = invoices[original_index]
+                    same_group = (
+                        (invoice.vehicle_type or "-") == vtype
+                        and (invoice.term_name or "Termin") == term
+                    )
+                    qty = (
+                        qty_map[original_index].get(item_name, 0)
+                        if same_group
+                        else 0
+                    )
+                    if qty:
+                        qty_cell = ws.cell(
+                            row=row, column=first_col + offset, value=qty
+                        )
+                        qty_cell.number_format = "0"
+                    total_qty += qty
+
+                total_cell = ws.cell(
+                    row=row, column=total_col, value=total_qty
+                )
+                total_cell.number_format = "#,##0"
+                amount_cell = ws.cell(
+                    row=row,
+                    column=amount_col,
+                    value=total_qty * unit_price,
+                )
+                amount_cell.number_format = "#,##0"
+                row += 1
+
+    if row == 4:
+        ws.cell(
+            row=4, column=1, value="Tidak ada alokasi qty untuk diekspor."
+        )
+        row += 1
+
+    last_row = row - 1
+    ws.auto_filter.ref = f"A3:{get_column_letter(last_col)}{last_row}"
+    ws.freeze_panes = "D4"
+
+    # ---------------------------------------------------------------- layout
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["C"].width = 42
+    ws.column_dimensions["D"].width = 14
+    for offset in range(plate_cols):
+        ws.column_dimensions[get_column_letter(first_col + offset)].width = 16
+    ws.column_dimensions[get_column_letter(total_col)].width = 11
+    ws.column_dimensions[get_column_letter(amount_col)].width = 16
+
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_title_rows = "2:3"
+    ws.print_area = f"A1:{get_column_letter(last_col)}{last_row}"
+    return title
+
+
 def invoice_filename(invoice: InvoiceData) -> str:
     term = sanitize_filename(invoice.term_name or "Termin")
     plate = sanitize_filename(invoice.label or invoice.plate or "Kendaraan")
@@ -284,8 +592,21 @@ def export_invoices(
                 template_path,
                 invoice,
                 workbook=wb,
-                sheet_name=invoice.label or invoice.plate,
+                sheet_name=invoice.po_number
+                or invoice.label
+                or invoice.plate,
             )
+        # Sheet rekap di posisi pertama, lalu pivot qty di posisi kedua.
+        project_name = invoices[0].project_name or "Rekap Invoice"
+        build_rekap_sheet(
+            wb,
+            invoices,
+            project_name,
+            invoices[0].term_name or "Termin",
+            invoices[0].company_name or "",
+            index=0,
+        )
+        build_pivot_sheet(wb, invoices, index=1)
         term_name = sanitize_filename(invoices[0].term_name or "Termin")
         path = output / f"Invoice {term_name} - Semua Kendaraan.xlsx"
         if not overwrite:

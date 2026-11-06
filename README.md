@@ -9,7 +9,10 @@ koneksi internet. Dibangun dengan Python, PySide6, openpyxl, dan SQLite.
 
 ## Fitur
 
-- Proyek lokal: data klien, prefix No PO, tipe kendaraan default, tanggal invoice.
+- Proyek lokal: data klien, prefix No PO default, tipe kendaraan default, tanggal invoice.
+- Prefix No PO **per jenis kendaraan**: cukup isi sekali untuk setiap jenis, lalu
+  otomatis dipakai untuk semua unit pada jenis itu. No PO tiap invoice =
+  `prefix + nomor kendaraan` (atau label `JENIS #unit` bila plat kosong).
 - Import RAB dari Excel dengan **deteksi header otomatis** dan dialog koreksi
   pemetaan kolom (nama barang, satuan, harga, qty total, kolom termin).
 - Mendukung RAB **banyak jenis kendaraan** dalam satu sheet. Setiap blok
@@ -53,12 +56,22 @@ Atau klik dua kali `run.bat`. Script itu akan membuat virtual environment
 3. **Import RAB** akan otomatis membuat jenis kendaraan dan slot unit sesuai
    penanda `(N Unit)` di RAB. Plat boleh dibiarkan kosong dulu, lalu diisi lewat
    tabel kendaraan atau `Import Plat Excel`.
-4. Buka tab **2. Alokasi Termin**, pilih termin dan jenis kendaraan, lalu klik
+4. Di tab **1. Data Proyek**, isi **Prefix No PO per Jenis Kendaraan** pada tabel
+   yang tersedia. Cukup satu kali per jenis (mis. `VXN-` untuk semua unit Yamaha
+   Vixion); tidak perlu diisi per unit. Kolom **Contoh No PO** menunjukkan hasil
+   akhirnya.
+5. Buka tab **2. Alokasi Termin**, pilih termin dan jenis kendaraan, lalu klik
    `Bagi Otomatis`. Item dengan sisa akan memunculkan antrean konfirmasi.
    `Bagi Otomatis` memproses semua jenis kendaraan pada termin tersebut.
-5. Setelah semua item di semua jenis seimbang, klik `Kunci Termin`.
-6. Buka tab **3. Export Invoice**, pilih kendaraan, folder output, dan format.
+6. Setelah semua item di semua jenis seimbang, klik `Kunci Termin`.
+7. Buka tab **3. Export Invoice**, pilih kendaraan, folder output, dan format.
    Klik `Export Invoice`.
+   - Pilih <b>Satu workbook, sheet per kendaraan</b> untuk satu file Excel berisi
+     banyak sheet: sheet <b>Rekap</b> (posisi pertama), sheet
+     <b>Pivot Qty</b> (pembagian qty barang per termin terhadap No PO, difilter
+     otomatis berdasarkan Termin dan Jenis Kendaraan), lalu satu sheet per
+     kendaraan yang bernama No PO.
+   - Pilih <b>Satu file per kendaraan</b> untuk file terpisah per kendaraan.
 
 ## Format Excel RAB
 

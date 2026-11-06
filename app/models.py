@@ -12,7 +12,7 @@ class Project:
     name: str
     client_name: str = ""
     client_address: str = ""
-    po_prefix: str = "VXN-"
+    po_prefix: str = ""
     vehicle_type: str = ""
     invoice_date: str = ""
     created_at: str = ""
@@ -67,6 +67,7 @@ class Vehicle:
     vehicle_type_id: int | None = None
     unit_no: int = 0
     type_name: str = ""
+    po_prefix: str = ""
 
     @property
     def display_name(self) -> str:
@@ -93,6 +94,7 @@ class Vehicle:
             ),
             unit_no=int(row["unit_no"] or 0) if "unit_no" in keys else 0,
             type_name=(row["type_name"] or "") if "type_name" in keys else "",
+            po_prefix=(row["po_prefix"] or "") if "po_prefix" in keys else "",
         )
 
 
