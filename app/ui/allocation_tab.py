@@ -29,7 +29,7 @@ from ..services.allocation import (
     split_qty,
 )
 from ..services.validation import term_totals, validate_project, validate_term
-from ..utils import format_rupiah
+from ..utils import format_date_id, format_rupiah
 from .dialogs_alloc import RemainderDialog, RemainderJob, TermManagerDialog
 from .style import AMBER, GREEN, MUTED, RED
 from .widgets import Banner, Card, button, muted, setup_table
@@ -232,7 +232,8 @@ class AllocationTab(QWidget):
         self.alloc = self.db.get_term_allocations(self.term.id)
 
         invoice_date = self.term.date_obj or self.project.date_obj
-        self.date_label.setText(f"Tanggal: {invoice_date.strftime('%d-%m-%Y')}")
+        fmt = self.term.date_format or self.project.date_format or "full"
+        self.date_label.setText(f"Tanggal: {format_date_id(invoice_date, fmt)}")
         self.discount_label.setText(
             f"• Diskon: {self.term.discount_percent:g}%"
             if self.term.discount_percent

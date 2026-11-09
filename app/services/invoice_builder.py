@@ -4,7 +4,7 @@ from pathlib import Path
 
 from ..db import Database
 from ..models import Item, Project, Term, Vehicle
-from ..utils import format_rupiah
+from ..utils import format_date_id, format_rupiah
 from .invoice_export import InvoiceData, InvoiceLine
 
 
@@ -32,6 +32,8 @@ def build_invoice_data(
         return None
 
     invoice_date = term.date_obj or project.date_obj
+    date_format = term.date_format or project.date_format or "full"
+    invoice_date_text = format_date_id(invoice_date, date_format)
     label = vehicle.plate or vehicle.display_name
     po_prefix = vehicle.po_prefix or project.po_prefix or ""
     po_number = f"{po_prefix}{label}"
@@ -46,6 +48,7 @@ def build_invoice_data(
         company_address=company_address,
         po_number=po_number,
         invoice_date=invoice_date,
+        invoice_date_text=invoice_date_text,
         lines=lines,
         discount_percent=term.discount_percent,
         term_name=term.name,

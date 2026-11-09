@@ -41,6 +41,7 @@ class InvoiceData:
     company_address: str
     po_number: str
     invoice_date: date
+    invoice_date_text: str = ""
     lines: list[InvoiceLine] = field(default_factory=list)
     discount_percent: float = 0.0
     term_name: str = ""
@@ -190,7 +191,7 @@ def build_invoice_workbook(
     ws["C1"] = invoice.company_name or "CV. PANJI PERKASA"
     ws["C2"] = invoice.company_address or ""
     ws["B4"] = invoice.po_number
-    ws["B5"] = invoice_date
+    ws["B5"] = invoice.invoice_date_text or invoice_date
     ws["D4"] = invoice.client_name
     ws["D5"] = invoice.client_address
     ws["D6"] = invoice.plate

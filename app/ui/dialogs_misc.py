@@ -318,7 +318,11 @@ class LogDialog(QDialog):
 
 HELP_HTML = """
 <h2>Panduan Singkat</h2>
-<p><b>1. Buat proyek</b> lalu isi data klien, tipe kendaraan default, dan tanggal invoice.</p>
+<p><b>1. Buat proyek</b> lalu isi data klien, tipe kendaraan default, dan tanggal invoice.
+Tanggal invoice punya dua opsi format: <b>tanggal lengkap</b> (mis. "1 Juli 2026")
+atau <b>bulan dan tahun</b> (mis. "Juli 2026"). Format default diatur di proyek dan
+bisa ditimpa per termin di dialog <b>Kelola Termin</b> (pilihan "Ikuti proyek" memakai
+format default proyek).</p>
 <p><b>2. Import RAB</b> dari Excel. Aplikasi mendeteksi header otomatis; koreksi pemetaan
 kolom bila perlu. RAB boleh berisi banyak jenis kendaraan dengan penanda
 <code>NAMA JENIS (N Unit)</code>. Kolom yang dikenali:</p>

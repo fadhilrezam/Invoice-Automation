@@ -48,7 +48,9 @@ Atau klik dua kali `run.bat`. Script itu akan membuat virtual environment
 ## Alur Pemakaian
 
 1. **Buat proyek** dari sidebar, lalu lengkapi informasi proyek di tab
-   **1. Data Proyek**.
+   **1. Data Proyek**. Tanggal invoice punya dua opsi format: **tanggal lengkap**
+   (`1 Juli 2026`) atau **bulan dan tahun** (`Juli 2026`). Opsi ini bisa diatur
+   default di proyek dan ditimpa per termin di dialog `Kelola Termin`.
 2. **Import RAB** (tombol `Import RAB`):
    - pilih file `.xlsx`;
    - periksa sheet, baris header, dan peran kolom di dialog pemetaan;

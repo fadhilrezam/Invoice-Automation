@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS projects (
     po_prefix TEXT NOT NULL DEFAULT '',
     vehicle_type TEXT NOT NULL DEFAULT '',
     invoice_date TEXT NOT NULL,
+    date_format TEXT NOT NULL DEFAULT 'full',
     created_at TEXT NOT NULL
 );
 
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS terms (
     name TEXT NOT NULL,
     seq INTEGER NOT NULL DEFAULT 0,
     invoice_date TEXT,
+    date_format TEXT,
     discount_percent REAL NOT NULL DEFAULT 0,
     locked INTEGER NOT NULL DEFAULT 0
 );
@@ -209,6 +211,16 @@ class Database:
              ) = 1"""
         )
 
+        # Migrasi: tambahkan kolom date_format ke projects dan terms
+        if "date_format" not in self._columns("projects"):
+            self.conn.execute(
+                "ALTER TABLE projects ADD COLUMN date_format TEXT NOT NULL DEFAULT 'full'"
+            )
+        if "date_format" not in self._columns("terms"):
+            self.conn.execute(
+                "ALTER TABLE terms ADD COLUMN date_format TEXT"
+            )
+
     # ------------------------------------------------------------------ utils
     def close(self) -> None:
         self.conn.close()
@@ -247,14 +259,15 @@ class Database:
         po_prefix: str = "",
         vehicle_type: str = "",
         invoice_date: date | None = None,
+        date_format: str = "full",
     ) -> int:
         invoice_date = invoice_date or date.today()
         with self.transaction() as conn:
             cur = conn.execute(
                 """INSERT INTO projects
                    (name, client_name, client_address, po_prefix, vehicle_type,
-                    invoice_date, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    invoice_date, date_format, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     name.strip() or "Proyek Baru",
                     client_name,
@@ -262,6 +275,7 @@ class Database:
                     po_prefix,
                     vehicle_type,
                     date_to_iso(invoice_date),
+                    date_format or "full",
                     self._now(),
                 ),
             )
@@ -282,6 +296,7 @@ class Database:
         po_prefix: str | None = None,
         vehicle_type: str | None = None,
         invoice_date: date | None = None,
+        date_format: str | None = None,
     ) -> None:
         fields: list[str] = []
         values: list[object] = []
@@ -291,6 +306,7 @@ class Database:
             ("client_address", client_address),
             ("po_prefix", po_prefix),
             ("vehicle_type", vehicle_type),
+            ("date_format", date_format),
         ):
             if value is not None:
                 fields.append(f"{key} = ?")
@@ -701,6 +717,7 @@ class Database:
         name: str,
         invoice_date: date | None = None,
         discount_percent: float = 0.0,
+        date_format: str | None = None,
     ) -> int:
         seq = self.conn.execute(
             "SELECT COALESCE(MAX(seq), 0) + 1 FROM terms WHERE project_id = ?",
@@ -709,13 +726,15 @@ class Database:
         with self.transaction() as conn:
             cur = conn.execute(
                 """INSERT INTO terms
-                   (project_id, name, seq, invoice_date, discount_percent, locked)
-                   VALUES (?, ?, ?, ?, ?, 0)""",
+                   (project_id, name, seq, invoice_date, date_format,
+                    discount_percent, locked)
+                   VALUES (?, ?, ?, ?, ?, ?, 0)""",
                 (
                     project_id,
                     name.strip() or f"Termin {seq}",
                     seq,
                     date_to_iso(invoice_date) if invoice_date else None,
+                    date_format or None,
                     float(discount_percent or 0),
                 ),
             )
@@ -728,6 +747,8 @@ class Database:
         name: str | None = None,
         invoice_date: date | None = None,
         discount_percent: float | None = None,
+        date_format: str | None = None,
+        clear_date_format: bool = False,
     ) -> None:
         fields: list[str] = []
         values: list[object] = []
@@ -740,6 +761,11 @@ class Database:
         if discount_percent is not None:
             fields.append("discount_percent = ?")
             values.append(float(discount_percent))
+        if clear_date_format:
+            fields.append("date_format = NULL")
+        elif date_format is not None:
+            fields.append("date_format = ?")
+            values.append(date_format or None)
         if not fields:
             return
         values.append(term_id)

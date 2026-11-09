@@ -92,12 +92,16 @@ class ProjectTab(QWidget):
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("dd MMM yyyy")
+        self.date_format_combo = QComboBox()
+        self.date_format_combo.addItem("Tanggal lengkap (1 Juli 2026)", "full")
+        self.date_format_combo.addItem("Bulan dan tahun (Juli 2026)", "bulan_tahun")
         form.addRow("Nama proyek", self.name_edit)
         form.addRow("Kepada Yth (klien)", self.client_edit)
         form.addRow("Alamat klien", self.address_edit)
         form.addRow("Prefix No PO (default)", self.po_edit)
         form.addRow("Tipe kendaraan default", self.type_edit)
         form.addRow("Tanggal invoice", self.date_edit)
+        form.addRow("Format tanggal invoice", self.date_format_combo)
         info.add_layout(form)
         save_row = QHBoxLayout()
         save_row.addStretch(1)
@@ -258,6 +262,8 @@ class ProjectTab(QWidget):
         self.type_edit.setText(project.vehicle_type)
         d = project.date_obj
         self.date_edit.setDate(QDate(d.year, d.month, d.day))
+        fmt_index = self.date_format_combo.findData(project.date_format or "full")
+        self.date_format_combo.setCurrentIndex(fmt_index if fmt_index >= 0 else 0)
         self.refresh()
 
     def refresh(self) -> None:
@@ -433,6 +439,7 @@ class ProjectTab(QWidget):
             po_prefix=self.po_edit.text().strip(),
             vehicle_type=self.type_edit.text().strip(),
             invoice_date=date(qdate.year(), qdate.month(), qdate.day()),
+            date_format=self.date_format_combo.currentData() or "full",
         )
         self.db.log(self.project.id, "edit_proyek", f"Informasi proyek diperbarui")
         self.project = self.db.get_project(self.project.id)

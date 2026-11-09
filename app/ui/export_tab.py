@@ -27,7 +27,7 @@ from ..models import Project, Term
 from ..services.invoice_builder import build_invoice_data
 from ..services.invoice_export import InvoiceExportError, export_invoices
 from ..services.validation import term_totals, validate_project, validate_term
-from ..utils import format_rupiah
+from ..utils import format_date_id, format_rupiah
 from .style import GREEN, MUTED, RED
 from .widgets import Banner, Card, button, muted, setup_table
 
@@ -219,7 +219,8 @@ class ExportTab(QWidget):
         self.vehicles = self.db.list_vehicles(self.project.id)
         allocations = self.db.get_term_allocations(self.term.id)
 
-        date_text = (self.term.date_obj or self.project.date_obj).strftime("%d-%m-%Y")
+        fmt = self.term.date_format or self.project.date_format or "full"
+        date_text = format_date_id(self.term.date_obj or self.project.date_obj, fmt)
         self.term_info.setText(
             f"Tanggal {date_text} • diskon {self.term.discount_percent:g}%"
         )

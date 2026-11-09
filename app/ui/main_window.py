@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from ..config import APP_TITLE, db_path
 from ..db import Database
 from ..models import Project
+from ..utils import format_date_id
 from .allocation_tab import AllocationTab
 from .dialogs_misc import HelpDialog, LogDialog, SettingsDialog
 from .export_tab import ExportTab
@@ -236,7 +237,8 @@ class MainWindow(QMainWindow):
             item.setData(Qt.UserRole, project.id)
             item.setToolTip(
                 f"Klien: {project.client_name or '-'}\n"
-                f"Tanggal invoice: {project.invoice_date}"
+                f"Tanggal invoice: "
+                f"{format_date_id(project.date_obj, project.date_format or 'full')}"
             )
             self.project_list.addItem(item)
             if project.id == select_id:

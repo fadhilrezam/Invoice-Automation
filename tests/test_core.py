@@ -186,6 +186,34 @@ class DatabaseAndValidationTests(unittest.TestCase):
         self.db.set_allocation(term.id, item.id, self.db.list_vehicles(self.pid)[1].id, 1)
         self.assertEqual(validate_term(self.db, term), [])
 
+    def test_invoice_date_format_options(self):
+        import datetime
+
+        from app.utils import format_date_id
+
+        sample = datetime.date(2026, 7, 1)
+        self.assertEqual(format_date_id(sample, "full"), "1 Juli 2026")
+        self.assertEqual(format_date_id(sample, "bulan_tahun"), "Juli 2026")
+
+        # Format default proyek bisa diubah.
+        self.assertEqual(self.db.get_project(self.pid).date_format, "full")
+        self.db.update_project(
+            self.pid, invoice_date=sample, date_format="bulan_tahun"
+        )
+        project = self.db.get_project(self.pid)
+        self.assertEqual(project.date_format, "bulan_tahun")
+        self.assertEqual(project.date_obj, sample)
+
+        # Termin bisa override format, lalu kembali ikut proyek.
+        term_id = self.db.add_term(
+            self.pid, "Termin 1", invoice_date=sample, date_format="full"
+        )
+        self.assertEqual(self.db.get_term(term_id).date_format, "full")
+        self.db.update_term(term_id, clear_date_format=True)
+        self.assertIsNone(self.db.get_term(term_id).date_format)
+        self.db.update_term(term_id, date_format="bulan_tahun")
+        self.assertEqual(self.db.get_term(term_id).date_format, "bulan_tahun")
+
     def test_import_multi_vehicle_rab_creates_groups(self):
         import openpyxl
 
@@ -265,6 +293,7 @@ class InvoiceExportTests(unittest.TestCase):
             company_address="Kab. Bandung, Jawa Barat",
             po_number="VXN-D 1001 ABC",
             invoice_date=__import__("datetime").date(2026, 7, 1),
+            invoice_date_text="1 Juli 2026",
             lines=lines,
             discount_percent=10,
             term_name="Termin 1",
@@ -278,6 +307,7 @@ class InvoiceExportTests(unittest.TestCase):
             ws = wb.active
             self.assertEqual(ws["A1"].value, "INVOICE")
             self.assertEqual(ws["C1"].value, "CV. PANJI PERKASA")
+            self.assertEqual(ws["B5"].value, "1 Juli 2026")
             self.assertEqual(ws["D6"].value, "D 1001 ABC")
             self.assertEqual(ws["A11"].value, 1)
             self.assertEqual(ws["B11"].value, "Barang 1")

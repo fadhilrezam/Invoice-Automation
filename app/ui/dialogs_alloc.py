@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QHeaderView,
@@ -362,9 +363,15 @@ class TermManagerDialog(QDialog):
         )
 
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
-            ["Nama Termin", "Tanggal Invoice (YYYY-MM-DD)", "Diskon (%)", "Status"]
+            [
+                "Nama Termin",
+                "Tanggal Invoice (YYYY-MM-DD)",
+                "Format Tanggal",
+                "Diskon (%)",
+                "Status",
+            ]
         )
         setup_table(self.table, row_height=32)
         header = self.table.horizontalHeader()
@@ -372,9 +379,11 @@ class TermManagerDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.Fixed)
         header.setSectionResizeMode(2, QHeaderView.Fixed)
         header.setSectionResizeMode(3, QHeaderView.Fixed)
-        self.table.setColumnWidth(1, 210)
-        self.table.setColumnWidth(2, 110)
-        self.table.setColumnWidth(3, 120)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.table.setColumnWidth(1, 180)
+        self.table.setColumnWidth(2, 190)
+        self.table.setColumnWidth(3, 100)
+        self.table.setColumnWidth(4, 100)
         self._fill_table()
         root.addWidget(self.table, 1)
 
@@ -406,14 +415,26 @@ class TermManagerDialog(QDialog):
                 else self.project.date_obj.isoformat()
             )
             self.table.setItem(row, 1, QTableWidgetItem(date_text))
+            self.table.setCellWidget(
+                row, 2, self._make_format_combo(term.date_format)
+            )
             discount = QTableWidgetItem(f"{term.discount_percent:g}")
             discount.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(row, 2, discount)
+            self.table.setItem(row, 3, discount)
             status = QTableWidgetItem("Terkunci" if term.locked else "Terbuka")
             status.setFlags(status.flags() & ~Qt.ItemIsEditable)
             if term.locked:
                 status.setForeground(QColor(GREEN))
-            self.table.setItem(row, 3, status)
+            self.table.setItem(row, 4, status)
+
+    def _make_format_combo(self, date_format: str | None = None) -> QComboBox:
+        combo = QComboBox()
+        combo.addItem("Ikuti proyek", "")
+        combo.addItem("Tanggal lengkap", "full")
+        combo.addItem("Bulan dan tahun", "bulan_tahun")
+        idx = combo.findData(date_format or "")
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        return combo
 
     def _add_row(self) -> None:
         row = self.table.rowCount()
@@ -422,12 +443,13 @@ class TermManagerDialog(QDialog):
         name.setData(Qt.UserRole, None)
         self.table.setItem(row, 0, name)
         self.table.setItem(row, 1, QTableWidgetItem(self.project.date_obj.isoformat()))
+        self.table.setCellWidget(row, 2, self._make_format_combo(None))
         discount = QTableWidgetItem("0")
         discount.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.setItem(row, 2, discount)
+        self.table.setItem(row, 3, discount)
         status = QTableWidgetItem("Baru")
         status.setFlags(status.flags() & ~Qt.ItemIsEditable)
-        self.table.setItem(row, 3, status)
+        self.table.setItem(row, 4, status)
         self.table.setCurrentCell(row, 0)
 
     def _delete_row(self) -> None:
@@ -455,7 +477,7 @@ class TermManagerDialog(QDialog):
         self.table.removeRow(row)
 
     def _save(self) -> None:
-        rows: list[tuple[int | None, str, date, float]] = []
+        rows: list[tuple[int | None, str, date, float, str | None]] = []
         names: set[str] = set()
         for row in range(self.table.rowCount()):
             name_item = self.table.item(row, 0)
@@ -477,7 +499,13 @@ class TermManagerDialog(QDialog):
                     f"Tanggal '{date_text}' tidak dikenali. Gunakan format YYYY-MM-DD.",
                 )
                 return
-            discount_item = self.table.item(row, 2)
+            format_combo = self.table.cellWidget(row, 2)
+            date_format = (
+                (format_combo.currentData() or None)
+                if isinstance(format_combo, QComboBox)
+                else None
+            )
+            discount_item = self.table.item(row, 3)
             try:
                 discount = float((discount_item.text() if discount_item else "0").replace(",", "."))
             except ValueError:
@@ -487,12 +515,20 @@ class TermManagerDialog(QDialog):
                 QMessageBox.warning(self, "Diskon tidak valid", "Diskon harus antara 0 dan 100.")
                 return
             term_id = name_item.data(Qt.UserRole)
-            rows.append((int(term_id) if term_id is not None else None, name, parsed, discount))
+            rows.append(
+                (
+                    int(term_id) if term_id is not None else None,
+                    name,
+                    parsed,
+                    discount,
+                    date_format,
+                )
+            )
 
         with self.db.transaction() as conn:
             for term_id in self._deleted_ids:
                 conn.execute("DELETE FROM terms WHERE id = ?", (term_id,))
-            for term_id, name, parsed, discount in rows:
+            for term_id, name, parsed, discount, date_format in rows:
                 if term_id is None:
                     seq = conn.execute(
                         "SELECT COALESCE(MAX(seq), 0) + 1 FROM terms WHERE project_id = ?",
@@ -500,15 +536,23 @@ class TermManagerDialog(QDialog):
                     ).fetchone()[0]
                     conn.execute(
                         """INSERT INTO terms
-                           (project_id, name, seq, invoice_date, discount_percent, locked)
-                           VALUES (?, ?, ?, ?, ?, 0)""",
-                        (self.project.id, name, seq, parsed.isoformat(), discount),
+                           (project_id, name, seq, invoice_date, date_format,
+                            discount_percent, locked)
+                           VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                        (
+                            self.project.id,
+                            name,
+                            seq,
+                            parsed.isoformat(),
+                            date_format,
+                            discount,
+                        ),
                     )
                 else:
                     conn.execute(
-                        """UPDATE terms SET name = ?, invoice_date = ?, discount_percent = ?
-                           WHERE id = ?""",
-                        (name, parsed.isoformat(), discount, term_id),
+                        """UPDATE terms SET name = ?, invoice_date = ?, date_format = ?,
+                           discount_percent = ? WHERE id = ?""",
+                        (name, parsed.isoformat(), date_format, discount, term_id),
                     )
         self.db.log(
             self.project.id,

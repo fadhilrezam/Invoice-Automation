@@ -15,6 +15,7 @@ class Project:
     po_prefix: str = ""
     vehicle_type: str = ""
     invoice_date: str = ""
+    date_format: str = "full"
     created_at: str = ""
 
     @property
@@ -31,6 +32,7 @@ class Project:
             po_prefix=row["po_prefix"] or "",
             vehicle_type=row["vehicle_type"] or "",
             invoice_date=row["invoice_date"] or "",
+            date_format=(row["date_format"] or "full") if "date_format" in row.keys() else "full",
             created_at=row["created_at"] or "",
         )
 
@@ -105,6 +107,7 @@ class Term:
     name: str
     seq: int
     invoice_date: str | None = None
+    date_format: str | None = None
     discount_percent: float = 0.0
     locked: bool = False
 
@@ -125,6 +128,7 @@ class Term:
             name=row["name"] or "",
             seq=row["seq"] or 0,
             invoice_date=row["invoice_date"],
+            date_format=(row["date_format"] or None) if "date_format" in row.keys() else None,
             discount_percent=float(discount or 0),
             locked=bool(row["locked"]),
         )

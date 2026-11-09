@@ -30,6 +30,34 @@ def parse_date_text(text: str, default: date | None = None) -> date | None:
     return default
 
 
+def format_date_id(value: date | None, fmt: str = "full") -> str:
+    """Format tanggal ke bahasa Indonesia.
+
+    fmt='full'        -> '1 Juli 2026'
+    fmt='bulan_tahun' -> 'Juli 2026'
+    """
+    if value is None:
+        return ""
+    bulan = (
+        "",
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+    )[value.month]
+    if fmt == "bulan_tahun":
+        return f"{bulan} {value.year}"
+    return f"{value.day} {bulan} {value.year}"
+
+
 def format_rupiah(value: float | int | None) -> str:
     value = int(round(value or 0))
     return f"Rp {value:,.0f}".replace(",", ".")
