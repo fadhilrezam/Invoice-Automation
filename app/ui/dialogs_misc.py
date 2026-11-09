@@ -350,9 +350,10 @@ satu plat per termin. Nama sheet invoice = No PO (prefix + plat). Hasil mengikut
 layout <code>invoice_template.xlsx</code> (header, tabel item, sub total, disc, total,
 footer tanda tangan). Jumlah baris item menyesuaikan otomatis.</p>
 <p>Pilih format <b>Satu workbook, sheet per kendaraan</b> untuk mendapatkan satu file
-Excel berisi banyak sheet: sheet <b>Rekap</b> (di posisi pertama), sheet
-<b>Pivot Qty</b> (pembagian qty barang per termin terhadap No PO, dengan filter otomatis
-berdasarkan Termin dan Jenis Kendaraan), lalu satu sheet per kendaraan.</p>
+Excel berisi banyak sheet: sheet <b>Rekap</b> (di posisi pertama), satu sheet
+<b>Pivot Qty - {Jenis}</b> per jenis kendaraan (pembagian qty barang per termin
+terhadap No PO, dengan filter otomatis berdasarkan Termin), lalu satu sheet per
+kendaraan yang bernama No PO.</p>
 <h3>Aturan pembagian</h3>
 <p>Untuk qty Q dan N kendaraan: dasar = Q // N, sisa R = Q % N. Sebanyak R kendaraan
 mendapat tambahan 1, dipilih user. Saran awal memprioritaskan kendaraan yang paling

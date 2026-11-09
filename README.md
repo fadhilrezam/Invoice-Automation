@@ -67,9 +67,9 @@ Atau klik dua kali `run.bat`. Script itu akan membuat virtual environment
 7. Buka tab **3. Export Invoice**, pilih kendaraan, folder output, dan format.
    Klik `Export Invoice`.
    - Pilih <b>Satu workbook, sheet per kendaraan</b> untuk satu file Excel berisi
-     banyak sheet: sheet <b>Rekap</b> (posisi pertama), sheet
-     <b>Pivot Qty</b> (pembagian qty barang per termin terhadap No PO, difilter
-     otomatis berdasarkan Termin dan Jenis Kendaraan), lalu satu sheet per
+     banyak sheet: sheet <b>Rekap</b> (posisi pertama), satu sheet
+     <b>Pivot Qty - {Jenis}</b> per jenis kendaraan (pembagian qty barang per termin
+     terhadap No PO, difilter otomatis berdasarkan Termin), lalu satu sheet per
      kendaraan yang bernama No PO.
    - Pilih <b>Satu file per kendaraan</b> untuk file terpisah per kendaraan.
 

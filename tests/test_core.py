@@ -348,9 +348,15 @@ class InvoiceExportTests(unittest.TestCase):
             paths = export_invoices(TEMPLATE, invoices, tmp, mode="workbook")
             self.assertEqual(len(paths), 1)
             wb = openpyxl.load_workbook(paths[0])
+            # Rekap di posisi pertama.
             self.assertEqual(wb.sheetnames[0], "Rekap")
-            self.assertEqual(wb.sheetnames[1], "Pivot Qty")
-            self.assertEqual(len(wb.sheetnames), len(invoices) + 2)
+            # Sheet pivot qty satu per jenis kendaraan, setelah rekap.
+            pivot_names = [s for s in wb.sheetnames if s.startswith("Pivot Qty -")]
+            self.assertEqual(len(pivot_names), 2)
+            self.assertIn("Pivot Qty - Yamaha Vixion", wb.sheetnames)
+            self.assertIn("Pivot Qty - Suzuki Hayate", wb.sheetnames)
+            # Jumlah sheet: rekap + pivot per jenis + invoice per kendaraan.
+            self.assertEqual(len(wb.sheetnames), 1 + len(pivot_names) + len(invoices))
             ws = wb["Rekap"]
             self.assertEqual(ws["A1"].value, "Rekap R2 Lantas (Termin 1)")
             self.assertEqual(ws["A2"].value, "No")
@@ -359,6 +365,20 @@ class InvoiceExportTests(unittest.TestCase):
             self.assertEqual(ws["B4"].value, "HYT-D 2 B")
             self.assertEqual(ws["A5"].value, "TOTAL")
             self.assertEqual(ws["F5"].value, 500_000)
+            # Pivot sheet: tidak ada harga satuan / total harga.
+            ws_pivot = wb["Pivot Qty - Yamaha Vixion"]
+            self.assertEqual(ws_pivot["A1"].value, "Pivot Qty - Yamaha Vixion")
+            self.assertEqual(ws_pivot["A3"].value, "Termin")
+            self.assertEqual(ws_pivot["B3"].value, "Jenis Kendaraan")
+            self.assertEqual(ws_pivot["C3"].value, "Nama Barang")
+            self.assertEqual(ws_pivot["D3"].value, "VXN-D 1 A")
+            self.assertEqual(ws_pivot["E3"].value, "Total Qty")
+            # Data: qty per kolom kendaraan, total di kolom ujung.
+            self.assertEqual(ws_pivot["A4"].value, "Termin 1")
+            self.assertEqual(ws_pivot["B4"].value, "Yamaha Vixion")
+            self.assertEqual(ws_pivot["C4"].value, "Service")
+            self.assertEqual(ws_pivot["D4"].value, 1)
+            self.assertEqual(ws_pivot["E4"].value, 1)
             wb.close()
 
 
