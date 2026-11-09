@@ -365,6 +365,7 @@ class InvoiceExportTests(unittest.TestCase):
                 company_address="Bandung",
                 po_number=po_number,
                 invoice_date=datetime.date(2026, 7, 1),
+                invoice_date_text="1 Juli 2026",
                 lines=[InvoiceLine("Service", 1, 250_000)],
                 term_name="Termin 1",
                 project_name="R2 Lantas",
@@ -391,8 +392,10 @@ class InvoiceExportTests(unittest.TestCase):
             self.assertEqual(ws["A1"].value, "Rekap R2 Lantas (Termin 1)")
             self.assertEqual(ws["A2"].value, "No")
             self.assertEqual(ws["B3"].value, "VXN-D 1 A")
+            self.assertEqual(ws["C3"].value, "1 Juli 2026")
             self.assertEqual(ws["E3"].value, "Yamaha Vixion")
             self.assertEqual(ws["B4"].value, "HYT-D 2 B")
+            self.assertEqual(ws["C4"].value, "1 Juli 2026")
             self.assertEqual(ws["A5"].value, "TOTAL")
             self.assertEqual(ws["F5"].value, 500_000)
             # Pivot sheet: tidak ada harga satuan / total harga.
@@ -401,7 +404,7 @@ class InvoiceExportTests(unittest.TestCase):
             self.assertEqual(ws_pivot["A3"].value, "Termin")
             self.assertEqual(ws_pivot["B3"].value, "Jenis Kendaraan")
             self.assertEqual(ws_pivot["C3"].value, "Nama Barang")
-            self.assertEqual(ws_pivot["D3"].value, "VXN-D 1 A")
+            self.assertEqual(ws_pivot["D3"].value, "-D 1 A")
             self.assertEqual(ws_pivot["E3"].value, "Total Qty")
             # Data: qty per kolom kendaraan, total di kolom ujung.
             self.assertEqual(ws_pivot["A4"].value, "Termin 1")

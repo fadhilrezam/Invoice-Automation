@@ -297,7 +297,11 @@ def build_rekap_sheet(
     for invoice in invoices:
         ws.cell(row=row, column=1, value=row - 2)
         ws.cell(row=row, column=2, value=invoice.po_number)
-        ws.cell(row=row, column=3, value=invoice.invoice_date)
+        ws.cell(
+            row=row,
+            column=3,
+            value=invoice.invoice_date_text or invoice.invoice_date,
+        )
         ws.cell(row=row, column=4, value=invoice.plate or invoice.label or "")
         ws.cell(row=row, column=5, value=invoice.vehicle_type)
         ws.cell(row=row, column=6, value=invoice.total)
@@ -378,9 +382,12 @@ def build_pivot_sheets(
         used: dict[str, int] = {}
         plate_headers: list[tuple[int, str]] = []
         for orig_idx, invoice in enumerate(type_invoices):
-            header = (
+            raw_header = (
                 invoice.po_number or invoice.label or invoice.plate or "Kendaraan"
             ).strip()
+            # Ambil 6 karakter terakhir No PO agar kolom pivot ringkas
+            # (mis. VXN-10029-42 -> 029-42).
+            header = raw_header[-6:] if len(raw_header) > 6 else raw_header
             count = used.get(header, 0) + 1
             used[header] = count
             if count > 1:
