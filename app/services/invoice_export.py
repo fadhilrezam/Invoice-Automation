@@ -262,6 +262,17 @@ def build_invoice_workbook(
     return wb
 
 
+def _format_tanggal_pendek(value: date | None) -> str:
+    """Format tanggal pendek: 'Sep-26' (bulan singkat + 2 digit tahun)."""
+    if value is None:
+        return ""
+    bulan = (
+        "", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul",
+        "Ags", "Sep", "Okt", "Nov", "Des",
+    )[value.month]
+    return f"{bulan}-{str(value.year)[-2:]}"
+
+
 def build_rekap_sheet(
     wb: Workbook,
     invoices: Sequence[InvoiceData],
@@ -271,52 +282,89 @@ def build_rekap_sheet(
     *,
     index: int | None = None,
 ) -> str:
-    """Buat sheet rekap di workbook."""
+    """Buat sheet rekap di workbook dengan desain tabel header merah."""
     title = _unique_sheet_name(wb, "Rekap")
     ws = wb.create_sheet(title=title, index=index)
 
-    # Header
-    ws["A1"] = f"Rekap {project_name} ({term_name})"
-    ws["A1"].font = openpyxl.styles.Font(bold=True, size=14)
+    # Warna header sama dengan sheet invoice (merah tua, teks putih).
+    header_fill = PatternFill("solid", fgColor="C00000")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    thin = Side(style="thin", color="999999")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+    left = Alignment(horizontal="left", vertical="center")
+    right = Alignment(horizontal="right", vertical="center")
 
-    ws["A2"] = "No"
-    ws["B2"] = "No PO"
-    ws["C2"] = "Tanggal"
-    ws["D2"] = "No Kendaraan"
-    ws["E2"] = "Tipe Kendaraan"
-    ws["F2"] = "Jumlah (Rp.)"
+    # ---------------------------------------------------------------- judul
+    last_col = 7  # A..G
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
+    ws["A1"] = f"REKAP {project_name} ({term_name})"
+    ws["A1"].font = Font(bold=True, color="FFFFFF", size=14)
+    ws["A1"].alignment = left
+    for col in range(1, last_col + 1):
+        c = ws.cell(row=1, column=col)
+        c.fill = header_fill
+        c.border = border
 
-    # Style header
-    header_font = openpyxl.styles.Font(bold=True)
-    for col in range(1, 7):
-        ws.cell(row=2, column=col).font = header_font
+    # ---------------------------------------------------------------- header kolom
+    headers = ["No", "Sheet Invoice", "No PO", "Tanggal", "No Kendaraan",
+               "Tipe Kendaraan", "Jumlah (Rp.)"]
+    for col, text in enumerate(headers, start=1):
+        c = ws.cell(row=2, column=col, value=text)
+        c.font = header_font
+        c.fill = header_fill
+        c.border = border
+        c.alignment = center
 
-    # Data rows
+    # ---------------------------------------------------------------- data rows
     row = 3
     total_amount = 0
     for invoice in invoices:
-        ws.cell(row=row, column=1, value=row - 2)
-        ws.cell(row=row, column=2, value=invoice.po_number)
+        ws.cell(row=row, column=1, value=row - 2).alignment = center
+        ws.cell(row=row, column=2, value=invoice.po_number).alignment = left
+        ws.cell(row=row, column=3, value=invoice.po_number).alignment = left
         ws.cell(
-            row=row,
-            column=3,
-            value=invoice.invoice_date_text or invoice.invoice_date,
-        )
-        ws.cell(row=row, column=4, value=invoice.plate or invoice.label or "")
-        ws.cell(row=row, column=5, value=invoice.vehicle_type)
-        ws.cell(row=row, column=6, value=invoice.total)
+            row=row, column=4,
+            value=_format_tanggal_pendek(invoice.invoice_date),
+        ).alignment = center
+        ws.cell(row=row, column=5, value=invoice.plate or invoice.label or "").alignment = left
+        ws.cell(row=row, column=6, value=invoice.vehicle_type).alignment = left
+        amt = ws.cell(row=row, column=7, value=invoice.total)
+        amt.number_format = '#,##0.00'
+        amt.alignment = right
+        for col in range(1, last_col + 1):
+            ws.cell(row=row, column=col).border = border
         total_amount += invoice.total
         row += 1
 
-    # TOTAL row
-    ws["A" + str(row)] = "TOTAL"
-    ws["F" + str(row)] = total_amount
+    # ---------------------------------------------------------------- GRAND TOTAL
+    total_row = row
+    ws.cell(row=total_row, column=1, value="").border = border
+    ws.cell(row=total_row, column=2, value="GRAND TOTAL").font = Font(bold=True)
+    ws.cell(row=total_row, column=2).alignment = right
+    ws.cell(row=total_row, column=2).border = border
+    for col in range(3, 7):
+        ws.cell(row=total_row, column=col).border = border
+    amt = ws.cell(row=total_row, column=7, value=total_amount)
+    amt.number_format = '#,##0.00'
+    amt.font = Font(bold=True)
+    amt.alignment = right
+    amt.border = border
+    row += 1
 
-    # Per-type breakdown
-    breakdown_row = row + 2
-    ws["B" + str(breakdown_row)] = "Tipe Kendaraan"
-    ws["C" + str(breakdown_row)] = "Unit"
-    ws["D" + str(breakdown_row)] = "Jumlah (Rp.)"
+    # ---------------------------------------------------------------- per-type breakdown
+    row += 1  # baris kosong pemisah
+    breakdown_header_row = row
+    ws.cell(row=row, column=2, value="Tipe Kendaraan").font = Font(bold=True)
+    ws.cell(row=row, column=3, value="Unit").font = Font(bold=True)
+    ws.cell(row=row, column=4, value="Jumlah (Rp.)").font = Font(bold=True)
+    for col in range(2, 5):
+        c = ws.cell(row=row, column=col)
+        c.fill = header_fill
+        c.font = header_font
+        c.border = border
+        c.alignment = center
+    row += 1
 
     # Group invoices by vehicle_type
     types = {}
@@ -327,28 +375,52 @@ def build_rekap_sheet(
         types[vt]["unit_count"] += 1
         types[vt]["total"] += invoice.total
 
-    # Write per-type rows
-    br = breakdown_row + 1
     for vt, data in types.items():
-        ws.cell(row=br, column=2, value=vt)
-        ws.cell(row=br, column=3, value=data["unit_count"])
-        ws.cell(row=br, column=4, value=data["total"])
-        br += 1
+        ws.cell(row=row, column=2, value=vt).alignment = left
+        ws.cell(row=row, column=3, value=data["unit_count"]).alignment = center
+        amt = ws.cell(row=row, column=4, value=data["total"])
+        amt.number_format = '#,##0.00'
+        amt.alignment = right
+        for col in range(2, 5):
+            ws.cell(row=row, column=col).border = border
+        row += 1
 
-    # Footer
-    ws["E" + str(br)] = "Hormat Kami,"
-    ws["E" + str(br + 2)] = company_name
+    # Total Unit row
+    total_unit_row = row
+    ws.cell(row=row, column=2, value="Total Unit").font = Font(bold=True)
+    ws.cell(row=row, column=2).alignment = right
+    ws.cell(row=row, column=2).border = border
+    total_units = sum(d["unit_count"] for d in types.values())
+    uc = ws.cell(row=row, column=3, value=total_units)
+    uc.font = Font(bold=True)
+    uc.alignment = center
+    uc.border = border
+    amt = ws.cell(row=row, column=4, value=total_amount)
+    amt.number_format = '#,##0.00'
+    amt.font = Font(bold=True)
+    amt.alignment = right
+    amt.border = border
+    for col in (4,):
+        pass
+    row += 2
 
-    # Adjust column widths
-    for col in range(1, 7):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
+    # ---------------------------------------------------------------- footer
+    ws.cell(row=row, column=2, value="Hormat Kami,")
+    ws.cell(row=row + 2, column=2, value=company_name)
 
-    # Page setup
+    # ---------------------------------------------------------------- layout
+    col_widths = {1: 6, 2: 16, 3: 14, 4: 12, 5: 16, 6: 22, 7: 18}
+    for col, w in col_widths.items():
+        ws.column_dimensions[get_column_letter(col)].width = w
+
+    ws.auto_filter.ref = f"A2:{get_column_letter(last_col)}{row - 3}"
+    ws.freeze_panes = "A3"
+
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
-    ws.page_setup.orientation = "portrait"
+    ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
-    ws.print_area = f"A1:F{br + 4}"
+    ws.print_area = f"A1:{get_column_letter(last_col)}{row - 1}"
     return title
 
 

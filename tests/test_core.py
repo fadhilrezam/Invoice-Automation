@@ -389,15 +389,27 @@ class InvoiceExportTests(unittest.TestCase):
             # Jumlah sheet: rekap + pivot per jenis + invoice per kendaraan.
             self.assertEqual(len(wb.sheetnames), 1 + len(pivot_names) + len(invoices))
             ws = wb["Rekap"]
-            self.assertEqual(ws["A1"].value, "Rekap R2 Lantas (Termin 1)")
+            self.assertEqual(ws["A1"].value, "REKAP R2 Lantas (Termin 1)")
             self.assertEqual(ws["A2"].value, "No")
+            self.assertEqual(ws["B2"].value, "Sheet Invoice")
+            self.assertEqual(ws["C2"].value, "No PO")
+            self.assertEqual(ws["D2"].value, "Tanggal")
+            self.assertEqual(ws["E2"].value, "No Kendaraan")
+            self.assertEqual(ws["F2"].value, "Tipe Kendaraan")
+            self.assertEqual(ws["G2"].value, "Jumlah (Rp.)")
             self.assertEqual(ws["B3"].value, "VXN-D 1 A")
-            self.assertEqual(ws["C3"].value, "1 Juli 2026")
-            self.assertEqual(ws["E3"].value, "Yamaha Vixion")
+            self.assertEqual(ws["C3"].value, "VXN-D 1 A")
+            self.assertEqual(ws["D3"].value, "Jul-26")
+            self.assertEqual(ws["E3"].value, "D 1 A")
+            self.assertEqual(ws["F3"].value, "Yamaha Vixion")
+            self.assertEqual(ws["G3"].value, 250000.0)
             self.assertEqual(ws["B4"].value, "HYT-D 2 B")
-            self.assertEqual(ws["C4"].value, "1 Juli 2026")
-            self.assertEqual(ws["A5"].value, "TOTAL")
-            self.assertEqual(ws["F5"].value, 500_000)
+            self.assertEqual(ws["G4"].value, 250000.0)
+            self.assertEqual(ws["B5"].value, "GRAND TOTAL")
+            self.assertEqual(ws["G5"].value, 500000.0)
+            # Header berwarna merah (C00000) dengan teks putih.
+            self.assertEqual(ws["A2"].fill.fgColor.rgb, "00C00000")
+            self.assertEqual(ws["A2"].font.color.rgb, "00FFFFFF")
             # Pivot sheet: tidak ada harga satuan / total harga.
             ws_pivot = wb["Pivot Qty - Yamaha Vixion"]
             self.assertEqual(ws_pivot["A1"].value, "Pivot Qty - Yamaha Vixion")
