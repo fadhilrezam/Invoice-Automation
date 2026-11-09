@@ -434,15 +434,15 @@ def build_pivot_sheets(
                 horizontal="center", vertical="center", wrap_text=True
             )
 
-        # Label jenis kendaraan di baris 2 di atas setiap kolom No PO.
+        # Label "Ringkasan Item" di baris 2 (nama jenis sudah tertera di baris 1,
+        # jadi tidak perlu menuliskan ulang di atas tiap kolom No PO).
         if plate_headers:
             ws.cell(row=2, column=1, value="Ringkasan Item")
             ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=3)
-            for offset, (_, _) in enumerate(plate_headers):
-                ws.cell(row=2, column=first_col + offset, value=vtype)
             for col in range(1, last_col + 1):
-                ws.cell(row=2, column=col).font = header_font
-                ws.cell(row=2, column=col).alignment = Alignment(
+                cell = ws.cell(row=2, column=col)
+                cell.font = header_font
+                cell.alignment = Alignment(
                     horizontal="center", vertical="center"
                 )
 
@@ -488,13 +488,30 @@ def build_pivot_sheets(
         ws.freeze_panes = "D4"
 
         # ---------------------------------------------------------------- layout
-        ws.column_dimensions["A"].width = 14
-        ws.column_dimensions["B"].width = 22
-        ws.column_dimensions["C"].width = 42
-        ws.column_dimensions["D"].width = 14
+        # Lebar kolom disesuaikan dengan isi teks (fit to text, padat).
+        col_widths: dict[int, int] = {1: 12, 2: 16, 3: 26, total_col: 10}
         for offset in range(plate_cols):
-            ws.column_dimensions[get_column_letter(first_col + offset)].width = 16
-        ws.column_dimensions[get_column_letter(total_col)].width = 11
+            hdr = plate_headers[offset][1]
+            col_widths[first_col + offset] = max(10, len(hdr) + 2)
+        # Perpanjang kolom Nama Barang bila isinya lebih panjang.
+        for r in range(4, last_row + 1):
+            for c in range(1, last_col + 1):
+                val = ws.cell(row=r, column=c).value
+                if val is None:
+                    continue
+                need = len(str(val)) + 2
+                if c == 3:
+                    need = max(need, 26)
+                col_widths[c] = max(col_widths.get(c, 10), min(need, 40))
+        for col, w in col_widths.items():
+            ws.column_dimensions[get_column_letter(col)].width = w
+
+        # Tinggi baris agar padat dan menyesuaikan teks.
+        ws.row_dimensions[1].height = 18
+        ws.row_dimensions[2].height = 16
+        ws.row_dimensions[3].height = 30  # header wrap teks
+        for r in range(4, last_row + 1):
+            ws.row_dimensions[r].height = 15
 
         ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
         ws.page_setup.orientation = "landscape"
